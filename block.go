@@ -2,8 +2,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"strconv"
+	"log"
 	"time"
 )
 
@@ -15,21 +14,7 @@ type Block struct {
 	Data          []byte
 	PrevBlockHash []byte
 	Hash          []byte
-}
-
-func (b *Block) SetHash() {
-	// first send timestamp int64 to string, then string to []byte
-	timestamp := []byte(strconv.FormatInt(b.Timestamp, 10))
-
-	// basically this just adds the byte slices together into one big []byte
-	// kinda ugly way to do it but it works
-	headers := bytes.Join([][]byte{timestamp, b.Data, b.PrevBlockHash}, []byte{})
-
-	// take SHA256 hash
-	hash := sha256.Sum256(headers)
-
-	// convert [32]byte to []byte
-	b.Hash = hash[:]
+	Nonce         int
 }
 
 // a function to create a new block given some data that the block should store
@@ -40,7 +25,14 @@ func NewBlock(data string, prevBlockHash []byte) *Block {
 		Data:          []byte(data),
 		PrevBlockHash: prevBlockHash,
 	}
-	ret.SetHash()
+	// first ask proof of work to find the right nonce and hash
+	// for this block
+	pow := NewProofOfWork(&ret)
+	nonce, hash := pow.Run()
+	ret.Hash = hash[:]
+	ret.Nonce = nonce
+	log.Printf("nonce is %d, hash is %v", nonce, hash)
+
 	return &ret
 }
 

@@ -17,8 +17,8 @@ func (bc *Blockchain) AddBlock(data string) {
 	bc.blocks = append(bc.blocks, b)
 }
 
-func initBlockchain() *Blockchain {
-	// get the genesis block
+// get the genesis block
+func InitBlockchain() *Blockchain {
 	firstBlock := GenesisBlock()
 
 	// put the genesis block as the first block manually
