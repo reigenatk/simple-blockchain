@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/gob"
 	"log"
 	"time"
 )
@@ -54,4 +55,31 @@ func (b *Block) prepareHashBytes(nonce int) []byte {
 	nonceBytes := intToBuffer(int64(nonce))
 	headers := bytes.Join([][]byte{timestamp, b.Data, b.PrevBlockHash, target, nonceBytes}, []byte{})
 	return headers
+}
+
+// a function to serialize the Block struct to a []byte so we can
+// store it inside the DB. We use encoding/gob package to do the encoding
+// for us, its very efficient.
+func (b *Block) Serialize() []byte {
+	var output bytes.Buffer
+	enc := gob.NewEncoder(&output)
+	err := enc.Encode(b)
+	if err != nil {
+		log.Fatal("Encode err:", err)
+	}
+	return output.Bytes()
+}
+
+// opposite of Serialize, has to take a Block from the database and
+// put it back into our Block struct
+func Deserialize(b []byte) *Block {
+	var block Block
+
+	// we need to make a new bytes.Reader here, since NewDecoder expects this
+	dec := gob.NewDecoder(bytes.NewReader(b))
+	err := dec.Decode(&block)
+	if err != nil {
+		log.Fatal("Decode err:", err)
+	}
+	return &block
 }

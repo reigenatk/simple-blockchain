@@ -15,3 +15,8 @@ The **difficulty** is another way of saying that we set a certain target. For in
 
 Then when we want to **verify** whether a given hash passes the target, we can check whether that hash is less than `1<<(256 - 3)`, 256 because of SHA256 and -3 because then if any of the first 3 digits are nonzero, it will automatically be larger and we know the hash isn't good enough. Obviously, this 3 value is up for our choosing, and that is where the concept of *difficulty* comes in- a larger value would indicate a higher difficulty since the hashes have to be even smaller to pass.
 
+Blockchains also have **persistance**, meaning a database of some sort. We use [BoltDB](https://github.com/boltdb/bolt) in this implementation, a key-value store written in Go. Values are stored in **buckets**, and we will use two kinds of key -> value pairs (a simplified version of real Bitcoin implementation). They are:
+
+> 32-byte block-hash -> Block structure (serialized)
+> 'l' -> the hash of the last block in a chain
+
