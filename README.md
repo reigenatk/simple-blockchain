@@ -22,6 +22,9 @@ Blockchains also have **persistance**, meaning a database of some sort. We use [
 
 ### Code
 
+TX = "transaction"
+
 Libraries we use
-- encoding/gob
-- boltDB
+- `encoding/gob` for easy serialization/deserialization
+- `boltDB` for persistance
+- `flag` for user input

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
 	"log"
 	"time"
@@ -12,7 +13,7 @@ import (
 // transactions (Data in our case) is a separate data structure.
 type Block struct {
 	Timestamp     int64
-	Data          []byte
+	Transactions  []*Transaction
 	PrevBlockHash []byte
 	Hash          []byte
 	Nonce         int
@@ -20,10 +21,10 @@ type Block struct {
 
 // a function to create a new block given some data that the block should store
 // and the previous block hash
-func NewBlock(data string, prevBlockHash []byte) *Block {
+func NewBlock(transactions []*Transaction, prevBlockHash []byte) *Block {
 	ret := Block{
 		Timestamp:     time.Now().Unix(),
-		Data:          []byte(data),
+		Transactions:  transactions,
 		PrevBlockHash: prevBlockHash,
 	}
 	// first ask proof of work to find the right nonce and hash
@@ -38,18 +39,8 @@ func NewBlock(data string, prevBlockHash []byte) *Block {
 }
 
 // the first block on the chain
-func GenesisBlock() *Block {
-	return NewBlock("Genesis Data", []byte{})
-}
-
-// format the block header into []byte
-// including the nonce (which is the miner's guess)
-func (b *Block) prepareHashBytes(nonce int) []byte {
-	timestamp := intToBuffer(b.Timestamp)
-	target := intToBuffer(targetBits)
-	nonceBytes := intToBuffer(int64(nonce))
-	headers := bytes.Join([][]byte{timestamp, b.Data, b.PrevBlockHash, target, nonceBytes}, []byte{})
-	return headers
+func GenesisBlock(coinbase *Transaction) *Block {
+	return NewBlock([]*Transaction{coinbase}, []byte{})
 }
 
 // a function to serialize the Block struct to a []byte so we can
@@ -77,4 +68,22 @@ func Deserialize(b []byte) *Block {
 		log.Fatal("Decode err:", err)
 	}
 	return &block
+}
+
+// takes the transactions field off a Block object and
+// transforms it into a []byte so we can
+// put it with the other block header info and
+// start guessing nonces to mine the block
+func (b *Block) HashTransactions() []byte {
+	var txHashes [][]byte
+	var txHash [32]byte
+
+	// add each transaction's ID only
+	for _, tx := range b.Transactions {
+		txHashes = append(txHashes, tx.ID)
+	}
+	// join all the IDs into a big byte slice
+	// and take the hash of it
+	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
+	return txHash[:]
 }

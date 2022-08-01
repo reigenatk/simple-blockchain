@@ -8,6 +8,7 @@ import (
 )
 
 const blocksBucket string = "blocks"
+const genesisBlockData string = "Genesis Block"
 
 // a blockchain can be entirely defined by
 // 1. the hash of the latest block
@@ -27,7 +28,7 @@ type BlockchainIterator struct {
 }
 
 // add a new block to the blockchain
-func (bc *Blockchain) AddBlock(data string) {
+func (bc *Blockchain) AddBlock(transactions []*Transaction) {
 
 	var LatestHash []byte
 
@@ -40,7 +41,7 @@ func (bc *Blockchain) AddBlock(data string) {
 	})
 
 	// make the new block
-	b := NewBlock(data, LatestHash)
+	b := NewBlock(transactions, LatestHash)
 
 	// write the hash of this new block into DB as latest hash
 	bc.DB.Update(func(tx *bolt.Tx) error {
@@ -56,7 +57,7 @@ func (bc *Blockchain) AddBlock(data string) {
 
 // 32-byte block-hash -> Block structure (serialized)
 // 'l' -> the hash of the last block in a chain (l for latest)
-func InitBlockchain() *Blockchain {
+func InitBlockchain(address string) *Blockchain {
 
 	// hash of the tip of the blockchain (latest block)
 	var tip []byte
@@ -77,7 +78,9 @@ func InitBlockchain() *Blockchain {
 		// into the blockchain, also say its the last hash
 		if blockbucket == nil {
 			fmt.Println("No blockchain detected, creating genesis block...")
-			firstBlock := GenesisBlock()
+
+			newTransaction := NewCoinbaseTX(address, genesisBlockData)
+			firstBlock := GenesisBlock(newTransaction)
 
 			// make a new block
 			b, _ := tx.CreateBucket([]byte(blocksBucket))

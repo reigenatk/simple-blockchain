@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"math"
@@ -39,12 +40,12 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	var hash [32]byte
 	nonce := 0
 
-	fmt.Printf("Mining the block containing \"%s\"\n", pow.block.Data)
+	fmt.Printf("Mining the block containing \"%s\"\n", pow.block.Transactions)
 
 	// mine for the right nonce
 	for int64(nonce) < maxNonce {
 		// get the bytes for the hash
-		hashbytes := pow.block.prepareHashBytes(nonce)
+		hashbytes := pow.prepareHashBytes(nonce)
 
 		// perform the hash
 		hash = sha256.Sum256(hashbytes)
@@ -64,12 +65,24 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	return nonce, hash[:]
 }
 
+// format the block header into []byte
+// including the nonce (which is the miner's guess)
+func (pow *ProofOfWork) prepareHashBytes(nonce int) []byte {
+	timestamp := intToBuffer(pow.block.Timestamp)
+	target := intToBuffer(targetBits)
+	nonceBytes := intToBuffer(int64(nonce))
+
+	// this just joins all the byte slices together
+	headers := bytes.Join([][]byte{timestamp, pow.block.HashTransactions(), pow.block.PrevBlockHash, target, nonceBytes}, []byte{})
+	return headers
+}
+
 // check if said block's nonce + block header evaluates to
 // something smaller than the target. This more or less does same
 // calculation as Run except this time we are checking the nonce
 // instead of searching for a valid one
 func (pow *ProofOfWork) Validate() bool {
-	hashbytes := pow.block.prepareHashBytes(pow.block.Nonce)
+	hashbytes := pow.prepareHashBytes(pow.block.Nonce)
 
 	hash := sha256.Sum256(hashbytes)
 

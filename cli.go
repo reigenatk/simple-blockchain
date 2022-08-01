@@ -32,9 +32,13 @@ func (cli *CLI) Run() {
 	// define two possible commands
 	addBlock := flag.NewFlagSet("addblock", flag.ExitOnError)
 	printChain := flag.NewFlagSet("printchain", flag.ExitOnError)
+	newBlockchain := flag.NewFlagSet("newblockchain", flag.ExitOnError)
 
 	// add data arg to addBlock command
 	addBlockData := addBlock.String("data", "", "Data for new block")
+
+	// add extra arg to new blockchain command
+	createBlockchainAddress := newBlockchain.String("address", "", "The address to send genesis block reward to")
 
 	// call Parse depending on what the subcommand is?
 	switch os.Args[1] {
@@ -44,6 +48,11 @@ func (cli *CLI) Run() {
 			log.Panic(err)
 		}
 	case "printchain":
+		err := printChain.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
+	case "newblockchain":
 		err := printChain.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
@@ -63,6 +72,10 @@ func (cli *CLI) Run() {
 	// if it was to print chain
 	if printChain.Parsed() {
 		cli.printChain()
+	}
+
+	if newBlockchain.Parsed() {
+		cli.InitBlockchain(*createBlockchainAddress)
 	}
 }
 
@@ -85,7 +98,7 @@ func (cli *CLI) printChain() {
 		isValid := powChecker.Validate()
 
 		// print all our findings
-		fmt.Printf("Block with hash %x, Data: \"%s\" Prev Hash: %x, PoW: %s\n\n", block.Hash, block.Data, block.PrevBlockHash, strconv.FormatBool(isValid))
+		fmt.Printf("Block with hash %x, Prev Hash: %x, PoW: %s\n\n", block.Hash, block.PrevBlockHash, strconv.FormatBool(isValid))
 
 		// terminate when the previous block hash is empty
 		// meaning we are at the genesis block
@@ -93,4 +106,11 @@ func (cli *CLI) printChain() {
 			break
 		}
 	}
+}
+
+func (cli *CLI) InitBlockchain(address string) {
+	blockchain := InitBlockchain(address)
+	defer blockchain.DB.Close()
+
+	cli.bc = blockchain
 }

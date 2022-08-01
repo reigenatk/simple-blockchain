@@ -5,14 +5,8 @@ const targetBits = 16
 
 func main() {
 
-	// create a blockchain (which writes to db as well)
-	blockchain := InitBlockchain()
-
-	// close the DB after we're done
-	defer blockchain.DB.Close()
-
 	// startup a cli instance with this blockchain we made last line
-	cli := CLI{blockchain}
+	cli := CLI{}
 
 	// parse user input
 	cli.Run()
