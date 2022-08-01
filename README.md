@@ -20,9 +20,12 @@ Blockchains also have **persistance**, meaning a database of some sort. We use [
 > 32-byte block-hash -> Block structure (serialized)
 > 'l' -> the hash of the last block in a chain
 
+TX = "transaction"
+UTXO = "Unspent Transaction Outputs", basically any outputs that have not been referenced by any inputs.
+
 ### Code
 
-TX = "transaction"
+Blockchain has blocks (which you can access using Iterator), the blocks have transactions, and the transactions have inputs/outputs. Inputs on the transaction reference previous transactions' outputs.
 
 Libraries we use
 - `encoding/gob` for easy serialization/deserialization

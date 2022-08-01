@@ -25,7 +25,11 @@ func NewCoinbaseTX(to, data string) *Transaction {
 	if data == "" {
 		data = fmt.Sprintf("Reward to '%s'", to)
 	}
-	txin := TXInput{[]byte{}, -1, data}
+	txin := TXInput{
+		Txid:      []byte{},
+		Vout:      -1,
+		ScriptSig: data,
+	}
 	txout := TXOutput{
 		Value:        subsidy,
 		ScriptPubKey: to,
@@ -50,4 +54,11 @@ func (tx *Transaction) setID() {
 	}
 	hash := sha256.Sum256(output.Bytes())
 	tx.ID = hash[:]
+}
+
+// we can tell that a transaction is a coinbase type if
+// the vin array has length 1 and the vout is -1, and Txid of that transaction is
+// of length 0. Just as we set in NewCoinbaseTX
+func (tx *Transaction) isCoinbase() bool {
+	return len(tx.Vin) == 1 || len(tx.Vin[0].Txid) == 0 && tx.Vin[0].Vout == -1
 }

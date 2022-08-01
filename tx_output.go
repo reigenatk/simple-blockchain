@@ -7,3 +7,7 @@ type TXOutput struct {
 	// usually a random list of strings
 	ScriptPubKey string
 }
+
+func (txo *TXOutput) CanBeUnlockedWith(unlockData string) bool {
+	return txo.ScriptPubKey == unlockData
+}

@@ -8,3 +8,7 @@ type TXInput struct {
 	// Data to be used with an output's ScriptPubKey
 	ScriptSig string
 }
+
+func (txi *TXInput) CanUnlockOutputWith(unlockData string) bool {
+	return txi.ScriptSig == unlockData
+}

@@ -30,20 +30,22 @@ func (cli *CLI) Run() {
 	cli.validateArgLength()
 
 	// define two possible commands
-	addBlock := flag.NewFlagSet("addblock", flag.ExitOnError)
+	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
 	printChain := flag.NewFlagSet("printchain", flag.ExitOnError)
 	newBlockchain := flag.NewFlagSet("newblockchain", flag.ExitOnError)
+	getBalance := flag.NewFlagSet("getbalance", flag.ExitOnError)
 
-	// add data arg to addBlock command
-	addBlockData := addBlock.String("data", "", "Data for new block")
-
-	// add extra arg to new blockchain command
+	// extra args
+	getBalanceAddress := getBalance.String("address", "", "address to get balance from")
 	createBlockchainAddress := newBlockchain.String("address", "", "The address to send genesis block reward to")
+	sendFrom := sendCmd.String("from", "", "Source wallet address")
+	sendTo := sendCmd.String("to", "", "Destination wallet address")
+	sendAmount := sendCmd.Int("amount", 0, "Amount to send")
 
 	// call Parse depending on what the subcommand is?
 	switch os.Args[1] {
-	case "addblock":
-		err := addBlock.Parse(os.Args[2:])
+	case "send":
+		err := sendCmd.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -59,14 +61,21 @@ func (cli *CLI) Run() {
 		}
 	}
 
-	// if it was to addblock
-	if addBlock.Parsed() {
-		// if they didnt pass any data to add, exit out
-		if *addBlockData == "" {
-			addBlock.Usage()
+	if sendCmd.Parsed() {
+		if *sendFrom == "" || *sendTo == "" || *sendAmount <= 0 {
+			sendCmd.Usage()
 			os.Exit(1)
 		}
-		cli.addBlock(*addBlockData)
+
+		cli.send(*sendFrom, *sendTo, *sendAmount)
+	}
+
+	if getBalance.Parsed() {
+		if *getBalanceAddress == "" {
+			getBalance.Usage()
+			os.Exit(1)
+		}
+		cli.getBalance(*getBalanceAddress)
 	}
 
 	// if it was to print chain
@@ -80,7 +89,7 @@ func (cli *CLI) Run() {
 }
 
 func (cli *CLI) addBlock(data string) {
-	cli.bc.AddBlock(data)
+	cli.bc.AddBlock()
 	fmt.Println("Block successfully added")
 }
 
@@ -112,5 +121,13 @@ func (cli *CLI) InitBlockchain(address string) {
 	blockchain := InitBlockchain(address)
 	defer blockchain.DB.Close()
 
-	cli.bc = blockchain
+}
+
+func (cli *CLI) send(from, to string, amount int) {
+	blockchain := InitBlockchain(from)
+	defer blockchain.DB.Close()
+}
+
+func (cli *CLI) getBalance(address string) {
+
 }
