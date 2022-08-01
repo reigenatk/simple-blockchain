@@ -1,21 +1,19 @@
 package main
 
-import (
-	"log"
-	"strconv"
-)
-
 // we want 24 zero bits or more to accept a hash as OK
-const targetBits = 24
+const targetBits = 16
 
 func main() {
-	blockchain := InitBlockchain()
-	blockchain.AddBlock("some info 1")
-	blockchain.AddBlock("some info 2")
 
-	for _, block := range blockchain.blocks {
-		powChecker := NewProofOfWork(block)
-		isValid := powChecker.Validate()
-		log.Printf("Is block with data %s valid? %s", block.Data, strconv.FormatBool(isValid))
-	}
+	// create a blockchain (which writes to db as well)
+	blockchain := InitBlockchain()
+
+	// close the DB after we're done
+	defer blockchain.DB.Close()
+
+	// startup a cli instance with this blockchain we made last line
+	cli := CLI{blockchain}
+
+	// parse user input
+	cli.Run()
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/boltdb/bolt"
@@ -65,7 +66,6 @@ func InitBlockchain() *Blockchain {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
 
 	// start read write transaction in Bolt
 	err = db.Update(func(tx *bolt.Tx) error {
@@ -76,28 +76,40 @@ func InitBlockchain() *Blockchain {
 		// yet (aka it has no blocks), so make the genesis block and write it
 		// into the blockchain, also say its the last hash
 		if blockbucket == nil {
+			fmt.Println("No blockchain detected, creating genesis block...")
 			firstBlock := GenesisBlock()
 
 			// make a new block
 			b, _ := tx.CreateBucket([]byte(blocksBucket))
 
 			err = b.Put(firstBlock.Hash, firstBlock.Serialize())
+			if err != nil {
+				log.Panic(err)
+			}
 			err = b.Put([]byte("l"), firstBlock.Hash)
+			if err != nil {
+				log.Panic(err)
+			}
 			tip = firstBlock.Hash
 		} else {
 			// otherwise we have a blockchain already
 			// get the topmost block
-			b := tx.Bucket([]byte(blocksBucket))
-			tip = b.Get([]byte("l"))
+			tip = blockbucket.Get([]byte("l"))
 		}
 
 		return nil
 	})
+
+	if err != nil {
+		log.Panic(err)
+	}
+
 	// make the blockchain struct
 	blockchain := Blockchain{
 		LatestHash: tip,
 		DB:         db,
 	}
+
 	return &blockchain
 }
 
@@ -110,19 +122,25 @@ func (bc *Blockchain) Iterator() *BlockchainIterator {
 	}
 }
 
-// given a blockchainIterator, go to the next one
-// in order to go next one we merely need to CHANGE the current hash
-// to the value of the previous hash,
-// which is stored in the previous block! So
-// first obtain the block and deserialize it
-// then look at the previousHash field
-func (bci *BlockchainIterator) Next() *BlockchainIterator {
-	bci.db.View(func(tx *bolt.Tx) error {
+// returns the block pointed to by the blockchainIterator
+// this is found by comparing the currentHash field
+// it also has the side effect of moving the blockchainIterator
+// to point to the next Block
+func (bci *BlockchainIterator) Next() *Block {
+	var block *Block
+
+	err := bci.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(blocksBucket))
 		dbBlock := bucket.Get([]byte(bci.currentHash))
-		block := Deserialize(dbBlock)
-		bci.currentHash = block.PrevBlockHash
+		block = Deserialize(dbBlock)
 		return nil
 	})
-	return bci
+
+	if err != nil {
+		log.Println(err.Error())
+		log.Panic(err)
+	}
+
+	bci.currentHash = block.PrevBlockHash
+	return block
 }

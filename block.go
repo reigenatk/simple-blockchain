@@ -32,19 +32,14 @@ func NewBlock(data string, prevBlockHash []byte) *Block {
 	nonce, hash := pow.Run()
 	ret.Hash = hash[:]
 	ret.Nonce = nonce
-	log.Printf("nonce is %d, hash is %v", nonce, hash)
+	log.Printf("nonce is %d, hash is %x", nonce, hash)
 
 	return &ret
 }
 
 // the first block on the chain
 func GenesisBlock() *Block {
-	ret := Block{
-		Timestamp:     time.Now().Unix(),
-		Data:          []byte("genesis"),
-		PrevBlockHash: []byte{},
-	}
-	return &ret
+	return NewBlock("Genesis Data", []byte{})
 }
 
 // format the block header into []byte
