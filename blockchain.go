@@ -227,8 +227,8 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 
 					if in.CanUnlockOutputWith(address) {
 						inTxID := hex.EncodeToString(in.Txid)
-						fmt.Printf("Adding %d to spentTXOs\n", in.Vout)
-						spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
+						fmt.Printf("Adding %d to spentTXOs\n", in.OutputIdx)
+						spentTXOs[inTxID] = append(spentTXOs[inTxID], in.OutputIdx)
 					}
 				}
 			}
@@ -293,3 +293,5 @@ Work:
 
 	return balance, ret
 }
+
+func 

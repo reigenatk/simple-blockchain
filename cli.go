@@ -36,6 +36,7 @@ func (cli *CLI) Run() {
 	printChain := flag.NewFlagSet("printchain", flag.ExitOnError)
 	newBlockchain := flag.NewFlagSet("newblockchain", flag.ExitOnError)
 	getBalance := flag.NewFlagSet("getbalance", flag.ExitOnError)
+	createWallet := flag.NewFlagSet("createwallet", flag.ExitOnError)
 
 	// extra args
 	getBalanceAddress := getBalance.String("address", "", "address to get balance from")
@@ -66,6 +67,11 @@ func (cli *CLI) Run() {
 		if err != nil {
 			log.Panic(err)
 		}
+	case "createwallet":
+		err := createWallet.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 
 	if sendCmd.Parsed() {
@@ -92,6 +98,10 @@ func (cli *CLI) Run() {
 
 	if newBlockchain.Parsed() {
 		cli.InitBlockchain(*newBlockchainAddress)
+	}
+
+	if createWallet.Parsed() {
+		cli.createWallet()
 	}
 }
 
@@ -161,4 +171,15 @@ func (cli *CLI) getBalance(address string) {
 		ret += output.Value
 	}
 	fmt.Printf("The address %s has %d balance currently", address, ret)
+}
+
+func (cli *CLI) createWallet() {
+	wallets, err := NewWallets()
+	if err != nil {
+		log.Panic(err)
+	}
+	addr := wallets.createWallet()
+	fmt.Printf("Made a wallet, your address is %s", addr)
+
+	wallets.saveToFile()
 }
