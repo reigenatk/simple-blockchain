@@ -29,7 +29,7 @@ type BlockchainIterator struct {
 }
 
 // add a new block to the blockchain, takes in a list of transactions
-// to tie to the block we're adding
+// to tie to the block we're adding. This also saves it to the DB automatically
 func (bc *Blockchain) AddBlock(transactions []*Transaction) {
 
 	var LatestHash []byte
@@ -188,13 +188,16 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 			for outIdx, out := range tx.Vout {
 				// if this transaction has any spent outputs the
 				// results []int will not be nil
+				// fmt.Printf("spentTXOs for %s is %v\n", txID, spentTXOs[txID])
 				if spentTXOs[txID] != nil {
+
 					for _, spentOut := range spentTXOs[txID] {
 						// compare the index of the current vOut
 						// to that of the values in the array, if
 						// any are matching then this specific output
 						// transaction is matched, and therefore spent
 						// by an input. So we're done with this one
+
 						if spentOut == outIdx {
 							continue Outputs
 						}
@@ -203,8 +206,10 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 
 				// if any of the output transactions are not
 				// matched, then put the whole TRANSACTION object into unspentTXs array
-				// also we could add the same transaction object MULTIPLE times,
-				// one for each unmatched txoutput...
+				// which signifies that in this transaction there is still some money
+				// to spend, that belongs to address.
+				// also couldnt we add the same transaction object MULTIPLE times,
+				// one for each unmatched txoutput...?
 				if out.CanBeUnlockedWith(address) {
 					unspentTXs = append(unspentTXs, *tx)
 				}
@@ -216,10 +221,13 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 			// adding to the list there each time the input can be unlocked
 			// with the address. Finally we're putting this list under
 			// the hash of the output's transaction's ID
-			if tx.isCoinbase() == false {
+			if !tx.isCoinbase() {
+
 				for _, in := range tx.Vin {
+
 					if in.CanUnlockOutputWith(address) {
 						inTxID := hex.EncodeToString(in.Txid)
+						fmt.Printf("Adding %d to spentTXOs\n", in.Vout)
 						spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
 					}
 				}
@@ -239,6 +247,7 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 func (bc *Blockchain) findUnspentTXOs(address string) []TXOutput {
 	var ret []TXOutput
 	unspentTransactions := bc.FindUnspentTransactions(address)
+	// fmt.Printf("Unspent transactions for %s is %v\n", address, unspentTransactions)
 
 	// loop through each transaction object, which we know must have
 	// a few unspent outputs
@@ -250,4 +259,37 @@ func (bc *Blockchain) findUnspentTXOs(address string) []TXOutput {
 		}
 	}
 	return ret
+}
+
+// finds all UTXOs under address' name, and adds up the balances
+// until its greater than the amount we need
+// also use a map to store which TXOutput objects we needed to use
+func (bc *Blockchain) findSpendableOutputs(address string, amount int) (int, map[string][]int) {
+	ret := make(map[string][]int)
+
+	// first find all transactions which have unspent money owned by address
+	unspentTransactions := bc.FindUnspentTransactions(address)
+
+	balance := 0
+
+Work:
+	for _, tx := range unspentTransactions {
+		txID := hex.EncodeToString(tx.ID)
+		for outputidx, output := range tx.Vout {
+			// check if this output belongs to our address
+			if output.CanBeUnlockedWith(address) && balance < amount {
+				balance += output.Value
+
+				// mark this output transaction as used
+				ret[txID] = append(ret[txID], outputidx)
+
+				// this is just to save some time
+				if balance >= amount {
+					break Work
+				}
+			}
+		}
+	}
+
+	return balance, ret
 }

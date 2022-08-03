@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strconv"
+	"time"
 )
 
 // the largest value of nonce we can try, 2^63
@@ -39,8 +41,12 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0
-
-	fmt.Printf("Mining the block containing \"%s\"\n", pow.block.Transactions)
+	i, err := strconv.ParseInt(strconv.Itoa(int(pow.block.Timestamp)), 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	tm := time.Unix(i, 0)
+	fmt.Printf("Mining the block at timestamp \"%v\"\n", tm)
 
 	// mine for the right nonce
 	for int64(nonce) < maxNonce {

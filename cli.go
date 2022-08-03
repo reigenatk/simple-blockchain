@@ -16,7 +16,7 @@ type CLI struct {
 func (cli *CLI) printUsage() {
 	fmt.Println("Usage:")
 	fmt.Println("  getbalance -address ADDRESS - Get balance of ADDRESS")
-	fmt.Println("  createblockchain -address ADDRESS - Create a blockchain and send genesis block reward to ADDRESS")
+	fmt.Println("  newblockchain -address ADDRESS - Create a blockchain and send genesis block reward to ADDRESS")
 	fmt.Println("  printchain - Print all the blocks of the blockchain")
 	fmt.Println("  send -from FROM -to TO -amount AMOUNT - Send AMOUNT of coins from FROM address to TO")
 }
@@ -39,7 +39,7 @@ func (cli *CLI) Run() {
 
 	// extra args
 	getBalanceAddress := getBalance.String("address", "", "address to get balance from")
-	createBlockchainAddress := newBlockchain.String("address", "", "The address to send genesis block reward to")
+	newBlockchainAddress := newBlockchain.String("address", "", "The address to send genesis block reward to")
 	sendFrom := sendCmd.String("from", "", "Source wallet address")
 	sendTo := sendCmd.String("to", "", "Destination wallet address")
 	sendAmount := sendCmd.Int("amount", 0, "Amount to send")
@@ -91,12 +91,15 @@ func (cli *CLI) Run() {
 	}
 
 	if newBlockchain.Parsed() {
-		cli.InitBlockchain(*createBlockchainAddress)
+		cli.InitBlockchain(*newBlockchainAddress)
 	}
 }
 
 // prints out each block in the chain
 func (cli *CLI) printChain() {
+	if cli.bc == nil {
+		cli.bc = InitBlockchain("default")
+	}
 	curIterator := cli.bc.Iterator()
 
 	for {
@@ -120,17 +123,31 @@ func (cli *CLI) printChain() {
 }
 
 func (cli *CLI) InitBlockchain(address string) {
+	// if blockchain already exists this does nothing basically
 	blockchain := InitBlockchain(address)
 	defer blockchain.DB.Close()
 
 }
 
+// the essence of sending is two parts:
+// 1. deducting "amount" from from's balance
+// 2. adding "amount" to to's balance
+// the first part is done by making available a new UTXOs, unspent transaction output
+// with value equal to "amount" and ScriptPubKey equal to "to"
+// the second part is done by populating the TXInput array on the new transaction
+// so that when FindUnspentTransactions runs during something like getBalance,
+// it will recognize the previously unspent outputs as spent, and the balance
+// will effectively be "deducted" from from's account, because spent
+// outputs are skipped when counting total balance. That's the whole idea.
 func (cli *CLI) send(from, to string, amount int) {
 	blockchain := InitBlockchain(from)
 	defer blockchain.DB.Close()
 
-	transaction := NewUTXOTransaction(from, to, amount, blockchain)
+	// create transaction
+	transaction := NewGeneralTransaction(from, to, amount, blockchain)
+	// create and add new block to chain
 	blockchain.AddBlock([]*Transaction{transaction})
+	fmt.Println("Successfully sent", amount, "from", from, "to", to)
 }
 
 func (cli *CLI) getBalance(address string) {

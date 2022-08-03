@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"log"
 )
@@ -45,11 +46,52 @@ func NewCoinbaseTX(to, data string) *Transaction {
 	return tx
 }
 
-// makes a new (unspent) transaction object to
+// makes a new transaction object to
 // transfer x money from account a to b
-func NewUTXOTransaction(from, to string, amount int, blockchain *Blockchain) *Transaction {
+// the inputs "spend" the money from the sender
+// and the output is a new unspent transaction with "amount" money
+// unlockable only by the receiver's address, "to"
+func NewGeneralTransaction(from, to string, amount int, blockchain *Blockchain) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
+
+	amountOwned, outputTransactions := blockchain.findSpendableOutputs(from, amount)
+
+	// check if enough money
+	if amountOwned < amount {
+		log.Panic("Not enough balance!")
+	}
+
+	// take all the output transactions used to get this balance
+	// and make it the new inputs
+	for txid, listIdxes := range outputTransactions {
+		txidbytes, _ := hex.DecodeString(txid)
+		for _, idx := range listIdxes {
+			input := TXInput{
+				Txid:      txidbytes,
+				Vout:      idx,
+				ScriptSig: from,
+			}
+			inputs = append(inputs, input)
+		}
+	}
+
+	// make ScriptPubKey "to" so that the money belongs to "to" now
+	output := TXOutput{
+		Value:        amount,
+		ScriptPubKey: to,
+	}
+	outputs = append(outputs, output)
+
+	// if we weren't exact (which is likely, say we needed to send 50 but we had
+	// only +20 and +40) then we refund the extra 10 back to the sender
+	if amountOwned > amount {
+		output := TXOutput{
+			Value:        amountOwned - amount,
+			ScriptPubKey: from,
+		}
+		outputs = append(outputs, output)
+	}
 
 	tx := &Transaction{
 		ID:   nil,
@@ -77,5 +119,5 @@ func (tx *Transaction) setID() {
 // the vin array has length 1 and the vout is -1, and Txid of that transaction is
 // of length 0. Just as we set in NewCoinbaseTX
 func (tx *Transaction) isCoinbase() bool {
-	return len(tx.Vin) == 1 || len(tx.Vin[0].Txid) == 0 && tx.Vin[0].Vout == -1
+	return len(tx.Vin) == 1 && len(tx.Vin[0].Txid) == 0 && tx.Vin[0].Vout == -1
 }
