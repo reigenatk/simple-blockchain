@@ -20,7 +20,9 @@ type Transaction struct {
 }
 
 // coinbase transaction is a specific type of transaction
-// used to reward miners. It has one input only
+// used to reward miners. It is not a normal transaction
+// in the sense that it accesses no previous outputs
+// and also stores a subsidy (miner reward) as the value in its output
 func NewCoinbaseTX(to, data string) *Transaction {
 	if data == "" {
 		data = fmt.Sprintf("Reward to '%s'", to)
@@ -38,6 +40,21 @@ func NewCoinbaseTX(to, data string) *Transaction {
 		ID:   nil,
 		Vin:  []TXInput{txin},
 		Vout: []TXOutput{txout},
+	}
+	tx.setID()
+	return tx
+}
+
+// makes a new (unspent) transaction object to
+// transfer x money from account a to b
+func NewUTXOTransaction(from, to string, amount int, blockchain *Blockchain) *Transaction {
+	var inputs []TXInput
+	var outputs []TXOutput
+
+	tx := &Transaction{
+		ID:   nil,
+		Vin:  inputs,
+		Vout: outputs,
 	}
 	tx.setID()
 	return tx

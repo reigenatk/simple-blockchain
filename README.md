@@ -25,7 +25,7 @@ UTXO = "Unspent Transaction Outputs", basically any outputs that have not been r
 
 ### Code
 
-Blockchain has blocks (which you can access using Iterator), the blocks have transactions, and the transactions have inputs/outputs. Inputs on the transaction reference previous transactions' outputs.
+Blockchain has blocks (which you can access using Iterator), each block has a list of transactions, and each transaction has a list of inputs/outputs (TXInput, TXOutput). Inputs on the transaction reference previous transactions' outputs, possibly more than one transaction output, but they must be from separate transaction objects. 
 
 Libraries we use
 - `encoding/gob` for easy serialization/deserialization
