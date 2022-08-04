@@ -19,6 +19,9 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  newblockchain -address ADDRESS - Create a blockchain and send genesis block reward to ADDRESS")
 	fmt.Println("  printchain - Print all the blocks of the blockchain")
 	fmt.Println("  send -from FROM -to TO -amount AMOUNT - Send AMOUNT of coins from FROM address to TO")
+	fmt.Println("  listaddresses - list all the addresses on this network")
+	fmt.Println("  createwallet - Generates a public/private keypair, returns your address")
+	fmt.Println("  clear - Clears all the files (blockchain.db) and (wallets.dat)")
 }
 
 func (cli *CLI) validateArgLength() {
@@ -37,6 +40,8 @@ func (cli *CLI) Run() {
 	newBlockchain := flag.NewFlagSet("newblockchain", flag.ExitOnError)
 	getBalance := flag.NewFlagSet("getbalance", flag.ExitOnError)
 	createWallet := flag.NewFlagSet("createwallet", flag.ExitOnError)
+	listAddresses := flag.NewFlagSet("listaddresses", flag.ExitOnError)
+	clear := flag.NewFlagSet("clear", flag.ExitOnError)
 
 	// extra args
 	getBalanceAddress := getBalance.String("address", "", "address to get balance from")
@@ -72,6 +77,16 @@ func (cli *CLI) Run() {
 		if err != nil {
 			log.Panic(err)
 		}
+	case "listaddresses":
+		err := listAddresses.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
+	case "clear":
+		err := clear.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 
 	if sendCmd.Parsed() {
@@ -102,6 +117,14 @@ func (cli *CLI) Run() {
 
 	if createWallet.Parsed() {
 		cli.createWallet()
+	}
+
+	if listAddresses.Parsed() {
+		cli.listAddresses()
+	}
+
+	if clear.Parsed() {
+		cli.clear()
 	}
 }
 
@@ -142,20 +165,28 @@ func (cli *CLI) InitBlockchain(address string) {
 // the essence of sending is two parts:
 // 1. deducting "amount" from from's balance
 // 2. adding "amount" to to's balance
-// the first part is done by making available a new UTXOs, unspent transaction output
-// with value equal to "amount" and ScriptPubKey equal to "to"
-// the second part is done by populating the TXInput array on the new transaction
-// so that when FindUnspentTransactions runs during something like getBalance,
+
+// The first part is done by populating the TXInput array on the new transaction
+// to POINT to the TXOutput that we are consuming
+// (using TXInput's Txid and OutputIdx fields)
+// so that later when FindUnspentTransactions runs during something like getBalance,
 // it will recognize the previously unspent outputs as spent, and the balance
 // will effectively be "deducted" from from's account, because spent
 // outputs are skipped when counting total balance. That's the whole idea.
+
+// the second part is done by making available a bunch of new UTXOs,
+// whose 'PublicKeyHash' field is the corresponding hash of the person
+// to receive the money. And again, when getBalance runs again, these
+// new outputs are not tied to any input and hence are added to the balance
+// of the owner
 func (cli *CLI) send(from, to string, amount int) {
 	blockchain := InitBlockchain(from)
 	defer blockchain.DB.Close()
 
 	// create transaction
 	transaction := NewGeneralTransaction(from, to, amount, blockchain)
-	// create and add new block to chain
+
+	// create and add new block to chain (this does the mining)
 	blockchain.AddBlock([]*Transaction{transaction})
 	fmt.Println("Successfully sent", amount, "from", from, "to", to)
 }
@@ -182,4 +213,27 @@ func (cli *CLI) createWallet() {
 	fmt.Printf("Made a wallet, your address is %s", addr)
 
 	wallets.saveToFile()
+}
+
+// this just goes thru all the Wallet objects in Wallets
+// and creates addresses from the public keys
+func (cli *CLI) listAddresses() {
+	wallets, err := NewWallets()
+	if err != nil {
+		log.Panic(err)
+	}
+	for address, _ := range wallets.Wallets {
+		fmt.Println(address)
+	}
+}
+
+func (cli *CLI) clear() {
+	e := os.Remove("blockchain.db")
+	if e != nil {
+		fmt.Println(e)
+	}
+	e2 := os.Remove("wallets.dat")
+	if e2 != nil {
+		fmt.Println(e2)
+	}
 }

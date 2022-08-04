@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -29,12 +31,23 @@ type BlockchainIterator struct {
 }
 
 // add a new block to the blockchain, takes in a list of transactions
-// to tie to the block we're adding. This also saves it to the DB automatically
+// to set equal to the "Transactions" field of
+// the block we're adding. This also saves it to the DB automatically
+
 func (bc *Blockchain) AddBlock(transactions []*Transaction) {
 
 	var LatestHash []byte
 
-	// try to find what the latest hash was
+	// before we add it to the chain though, we must VERIFY the digital signature
+	// on all TXInputs for each Transaction.
+	for _, tx := range transactions {
+		isVerified := bc.verifyTransaction(tx)
+		if !isVerified {
+			log.Panic("Block failed digital signature verification, exiting!")
+		}
+	}
+
+	// try to find what the latest hash was, we need it since
 	// this will be "previousHash" field for this new block we're making
 	bc.DB.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(blocksBucket))
@@ -72,7 +85,7 @@ func InitBlockchain(address string) *Blockchain {
 	var tip []byte
 
 	// first open database file
-	db, err := bolt.Open("my.db", 0600, nil)
+	db, err := bolt.Open("blockchain.db", 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -165,7 +178,7 @@ func (bci *BlockchainIterator) Next() *Block {
 // Use TXInputs to add to the map, TXOutputs to check the map
 // if it isn't in the map, then its unspent. Check if the address unlocks
 // the TXOutput, and if so, we have an unspent transaction
-func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
+func (bc *Blockchain) FindUnspentTransactions(publicKeyHash []byte) []Transaction {
 	var unspentTXs []Transaction
 
 	// map from string to int slice
@@ -210,7 +223,7 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 				// to spend, that belongs to address.
 				// also couldnt we add the same transaction object MULTIPLE times,
 				// one for each unmatched txoutput...?
-				if out.CanBeUnlockedWith(address) {
+				if out.IsLockedWithKey(publicKeyHash) {
 					unspentTXs = append(unspentTXs, *tx)
 				}
 			}
@@ -225,7 +238,7 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 
 				for _, in := range tx.Vin {
 
-					if in.CanUnlockOutputWith(address) {
+					if in.UsesKey(publicKeyHash) {
 						inTxID := hex.EncodeToString(in.Txid)
 						fmt.Printf("Adding %d to spentTXOs\n", in.OutputIdx)
 						spentTXOs[inTxID] = append(spentTXOs[inTxID], in.OutputIdx)
@@ -246,14 +259,20 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 // we want something more specific, the actual TXOutputs
 func (bc *Blockchain) findUnspentTXOs(address string) []TXOutput {
 	var ret []TXOutput
-	unspentTransactions := bc.FindUnspentTransactions(address)
+	wallets, err := NewWallets()
+	if err != nil {
+		log.Panic(err)
+	}
+	wallet := wallets.findWallet(address)
+	pubKeyHash := HashPubKey(wallet.PublicKey)
+	unspentTransactions := bc.FindUnspentTransactions(pubKeyHash)
 	// fmt.Printf("Unspent transactions for %s is %v\n", address, unspentTransactions)
 
 	// loop through each transaction object, which we know must have
 	// a few unspent outputs
 	for _, transaction := range unspentTransactions {
 		for _, txoutput := range transaction.Vout {
-			if txoutput.CanBeUnlockedWith(address) {
+			if txoutput.IsLockedWithKey(pubKeyHash) {
 				ret = append(ret, txoutput)
 			}
 		}
@@ -264,11 +283,11 @@ func (bc *Blockchain) findUnspentTXOs(address string) []TXOutput {
 // finds all UTXOs under address' name, and adds up the balances
 // until its greater than the amount we need
 // also use a map to store which TXOutput objects we needed to use
-func (bc *Blockchain) findSpendableOutputs(address string, amount int) (int, map[string][]int) {
+func (bc *Blockchain) findSpendableOutputs(publicKeyHash []byte, amount int) (int, map[string][]int) {
 	ret := make(map[string][]int)
 
 	// first find all transactions which have unspent money owned by address
-	unspentTransactions := bc.FindUnspentTransactions(address)
+	unspentTransactions := bc.FindUnspentTransactions(publicKeyHash)
 
 	balance := 0
 
@@ -277,7 +296,7 @@ Work:
 		txID := hex.EncodeToString(tx.ID)
 		for outputidx, output := range tx.Vout {
 			// check if this output belongs to our address
-			if output.CanBeUnlockedWith(address) && balance < amount {
+			if output.IsLockedWithKey(publicKeyHash) && balance < amount {
 				balance += output.Value
 
 				// mark this output transaction as used
@@ -294,4 +313,50 @@ Work:
 	return balance, ret
 }
 
-func 
+// gets a certain transaction given a transaction ID
+// does this simply by using the Iterator and going through all the blocks
+func (bc *Blockchain) findTransaction(id []byte) (Transaction, error) {
+	it := bc.Iterator()
+	for {
+		block := it.Next()
+		for _, transaction := range block.Transactions {
+			if bytes.Compare(id, transaction.ID) == 0 {
+				return *transaction, nil
+			}
+		}
+		if len(block.PrevBlockHash) == 0 {
+			break
+		}
+	}
+	return Transaction{}, fmt.Errorf("No transaction of this ID was found!")
+}
+
+// this just creates the map needed to call transaction.Sign()
+// by repeatedly calling findTransaction, and then once that map is
+// ready we just call Sign with what we just made
+// takes in a private key and ID of transaction to sign, which makes sense
+func (bc *Blockchain) signTransaction(tx *Transaction, privkey ecdsa.PrivateKey) {
+
+	prevTXs := make(map[string]Transaction)
+	for _, vin := range tx.Vin {
+		transaction, _ := bc.findTransaction(vin.Txid)
+		transactionReferenced := hex.EncodeToString(transaction.ID)
+		prevTXs[transactionReferenced] = transaction
+	}
+	tx.Sign(privkey, prevTXs)
+}
+
+// this verifies a digital signature on a transaction
+func (bc *Blockchain) verifyTransaction(tx *Transaction) bool {
+
+	prevTXs := make(map[string]Transaction)
+	for _, vin := range tx.Vin {
+		transaction, err := bc.findTransaction(vin.Txid)
+		if err != nil {
+			log.Print(err)
+		}
+		transactionReferenced := hex.EncodeToString(transaction.ID)
+		prevTXs[transactionReferenced] = transaction
+	}
+	return tx.Verify(prevTXs)
+}

@@ -4,7 +4,24 @@ Following [this](https://jeiwan.net/posts/building-blockchain-in-go-part-1/) I w
 
 ### Concepts
 
-Bitcoin uses **Hashcash** as a hashing protocol. It works by taking the block header (which consists of Timestamp, previous hash and data) and then adding a nonce to it, merging all that into a byte array, and taking the hash. If the hash meets a requirement as put forth by the current difficulty value, it will pass. Otherwise increment the nonce and try again. 
+First is the concept of a **Block**, which is merely just the following
+```
+type Block struct {
+	Timestamp     int64
+	Transactions  []*Transaction
+	PrevBlockHash []byte
+	Hash          []byte
+	Nonce         int
+}
+```
+
+Most important is the `PrevBlockHash`, this is the hash of the previous block and is the "chain" part of blockchain. Without the previous hash, its just a collection of blocks.
+
+Next is `Transactions`, which is a list of transactions on the block. We will get to this in another section. And finally a Hash/Nonce, which has to do with mining. 
+
+# Hashing/Mining
+
+Bitcoin uses **Hashcash** as a hashing protocol. It works by taking the block header (which consists of Timestamp, previous hash and transactions) and then adding a nonce to it, merging all that into a byte array, and taking the hash. If the hash meets a requirement as put forth by the current difficulty value, it will pass. Otherwise increment the nonce and try again. 
 
 In this implementation we use SHA256 as our hashing algorithm (which lots of cryptos use today as well), which takes in any input and outputs 256 bytes. A hashing algorithm has a few important properties, the main one is that given the output of the hash, it is nearly impossible to figure out the input. The formal term is **one-way**. This makes it computationally impossible for anyone to change the blockchain, hence giving its security.
 
@@ -36,6 +53,12 @@ You might wonder, why does this public/private key stuff matter? Well turns out 
 
 # Transactions
 
+![image](https://user-images.githubusercontent.com/69275171/182747076-e7c9e386-5bd0-4867-9b26-7e6948a6957d.png)
+
+Another important concept is the **Transaction**. In Bitcoin, transactions have inputs and outputs. The input is kind of like "spending" money, and the "output" is like available money. Each input can map to only one output, but a transaction can have multiple inputs.
+
+Inputs store the public key as well as a signature (which was signed by the private key). Outputs store the hash of the public key of the person the money belongs to.
+
 Every transaction input in Bitcoin is signed *by the one who created the transaction*. Every transaction in Bitcoin must be verified *before* being put in a block. Verification means (besides other procedures):
 
 1. Checking that inputs have permission to use outputs from previous transactions.
@@ -56,6 +79,7 @@ Transactions are hashed, and usually they use what's called a *trimmed copy*, wh
 `Coinbase` = The first transaction on the genesis block
 `Wallet` = Nothing more than a public/private key pair
 `Address` = The unique string that identifies you on the network. Under the hood, its just a hashed version of your public key.
+`ECDSA` = Elliptic Curve Digital Signature Algorithm
 
 ### Code
 
@@ -67,5 +91,8 @@ Libraries we use
 - `encoding/gob` for easy serialization/deserialization
 - `boltDB` for persistance
 - `flag` for user input
-- `github.com/itchyny/base58-go` for base58 encoding (Bitcoin Address generation)
-- `big` for large numbers (from ECDSA)
+- `github.com/btcsuite/btcutil/base58` for base58 encoding (used for Bitcoin Address generation)
+- `elliptic` for elliptic curves
+- `ecdsa` for elliptic curve algorithms `sign` and `verify`
+- `big` for large numbers (which are created from ECDSA)
+- `golang.org/x/crypto/ripemd160` for RIPEMD160 hash algorithm (used for publickey -> address)

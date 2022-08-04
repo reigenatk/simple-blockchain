@@ -29,17 +29,29 @@ type Transaction struct {
 // in the sense that it accesses no previous outputs
 // and also stores a subsidy (miner reward) as the value in its output
 func NewCoinbaseTX(to, data string) *Transaction {
+	wallets, err := NewWallets()
+	if err != nil {
+		log.Panic(err)
+	}
+	toWallet := wallets.findWallet(to)
+
 	if data == "" {
 		data = fmt.Sprintf("Reward to '%s'", to)
 	}
+
+	// here we set the publicKey on the TXInput to be
+	// equal to some random string since it wasn't signed by anyone
+	// nor does it have to be verified (we will avoid calling
+	// verify on it using isCoinbase() function)
 	txin := TXInput{
 		Txid:      []byte{},
 		OutputIdx: -1,
-		ScriptSig: data,
+		PublicKey: []byte(data),
+		Signature: nil,
 	}
 	txout := TXOutput{
-		Value:        subsidy,
-		ScriptPubKey: to,
+		Value:         subsidy,
+		PublicKeyHash: HashPubKey(toWallet.PublicKey),
 	}
 	tx := &Transaction{
 		ID:   nil,
@@ -59,7 +71,20 @@ func NewGeneralTransaction(from, to string, amount int, blockchain *Blockchain) 
 	var inputs []TXInput
 	var outputs []TXOutput
 
-	amountOwned, outputTransactions := blockchain.findSpendableOutputs(from, amount)
+	// get a list of all wallets
+	wallets, err := NewWallets()
+	if err != nil {
+		log.Panic(err)
+	}
+	// find the wallet that has the "from" address
+	// we do this because we need to use the public/private key
+	fromWallet := wallets.findWallet(from)
+
+	// need this since we wanna try to unlock unspent transactions
+	// code word for verifying the digital signatures
+	pubKeyHash := HashPubKey(fromWallet.PublicKey)
+
+	amountOwned, outputTransactions := blockchain.findSpendableOutputs(pubKeyHash, amount)
 
 	// check if enough money
 	if amountOwned < amount {
@@ -74,25 +99,27 @@ func NewGeneralTransaction(from, to string, amount int, blockchain *Blockchain) 
 			input := TXInput{
 				Txid:      txidbytes,
 				OutputIdx: idx,
-				ScriptSig: from,
+				PublicKey: fromWallet.PublicKey,
 			}
 			inputs = append(inputs, input)
 		}
 	}
 
 	// make ScriptPubKey "to" so that the money belongs to "to" now
+	toHash := GetPubkeyhashFromAddr(to)
 	output := TXOutput{
-		Value:        amount,
-		ScriptPubKey: to,
+		Value:         amount,
+		PublicKeyHash: toHash,
 	}
 	outputs = append(outputs, output)
 
 	// if we weren't exact (which is likely, say we needed to send 50 but we had
-	// only +20 and +40) then we refund the extra 10 back to the sender
+	// only +20 and +40) then we refund the extra 10 back to the sender, "from"
+	fromHash := GetPubkeyhashFromAddr(from)
 	if amountOwned > amount {
 		output := TXOutput{
-			Value:        amountOwned - amount,
-			ScriptPubKey: from,
+			Value:         amountOwned - amount,
+			PublicKeyHash: fromHash,
 		}
 		outputs = append(outputs, output)
 	}
@@ -102,7 +129,13 @@ func NewGeneralTransaction(from, to string, amount int, blockchain *Blockchain) 
 		Vin:  inputs,
 		Vout: outputs,
 	}
+
+	// this populates the ID field
 	tx.setID()
+
+	// sign the whole transaction, aka imprint our privateKey on it
+	// this will auto populate the TXInput's "Signature" field
+	blockchain.signTransaction(tx, fromWallet.PrivateKey)
 	return tx
 }
 
@@ -130,7 +163,7 @@ func (tx *Transaction) isCoinbase() bool {
 	return len(tx.Vin) == 1 && len(tx.Vin[0].Txid) == 0 && tx.Vin[0].OutputIdx == -1
 }
 
-// prevTXs is just a map from transaction IDs to Transaction object
+// prevTXs is just a map from transaction IDs (hex strings) to Transaction object
 // This func goes to each input in this transaction, finds the corresponding
 // Transaction which has the output, grabs the hash from that TXOutput
 // and gets an ID (by hashing the encoded Transaction object),
@@ -196,6 +229,19 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 // this function probably should be called after Sign(), otherwise
 // it makes no sense
 func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
+
+	// no sense in verifying coinbase transactions
+	if tx.isCoinbase() {
+		return true
+	}
+
+	// check to see if all transactions have IDs on them, they should by now
+	for _, vin := range tx.Vin {
+		if prevTXs[hex.EncodeToString(vin.Txid)].ID == nil {
+			log.Panic("ERROR: Previous transaction is not correct")
+		}
+	}
+
 	txtrim := tx.TrimmedCopy()
 	curve := elliptic.P256()
 
@@ -204,6 +250,7 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		// same procedure as in Sign
 		prevtxID := hex.EncodeToString(vin.Txid)
 		prevTX := prevTXs[prevtxID]
+		txtrim.Vin[idx].Signature = nil
 		txtrim.Vin[idx].PublicKey = prevTX.Vout[vin.OutputIdx].PublicKeyHash
 		txtrim.setID()
 		txtrim.Vin[idx].PublicKey = nil
