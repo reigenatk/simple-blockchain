@@ -180,6 +180,14 @@ func (cli *CLI) InitBlockchain(address string) {
 // new outputs are not tied to any input and hence are added to the balance
 // of the owner
 func (cli *CLI) send(from, to string, amount int) {
+
+	if !ValidateAddress(from) {
+		log.Panic("ERROR: Sender address is not valid")
+	}
+	if !ValidateAddress(to) {
+		log.Panic("ERROR: Recipient address is not valid")
+	}
+
 	blockchain := InitBlockchain(from)
 	defer blockchain.DB.Close()
 

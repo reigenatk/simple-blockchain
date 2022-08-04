@@ -240,7 +240,7 @@ func (bc *Blockchain) FindUnspentTransactions(publicKeyHash []byte) []Transactio
 
 					if in.UsesKey(publicKeyHash) {
 						inTxID := hex.EncodeToString(in.Txid)
-						fmt.Printf("Adding %d to spentTXOs\n", in.OutputIdx)
+						// fmt.Printf("Adding %d to spentTXOs\n", in.OutputIdx)
 						spentTXOs[inTxID] = append(spentTXOs[inTxID], in.OutputIdx)
 					}
 				}
@@ -290,7 +290,7 @@ func (bc *Blockchain) findSpendableOutputs(publicKeyHash []byte, amount int) (in
 	unspentTransactions := bc.FindUnspentTransactions(publicKeyHash)
 
 	balance := 0
-
+	numUnspentOutputs := 0
 Work:
 	for _, tx := range unspentTransactions {
 		txID := hex.EncodeToString(tx.ID)
@@ -298,6 +298,7 @@ Work:
 			// check if this output belongs to our address
 			if output.IsLockedWithKey(publicKeyHash) && balance < amount {
 				balance += output.Value
+				numUnspentOutputs++
 
 				// mark this output transaction as used
 				ret[txID] = append(ret[txID], outputidx)
@@ -309,7 +310,7 @@ Work:
 			}
 		}
 	}
-
+	fmt.Printf("%d unspent transactions found, %d unspent outputs\n", len(unspentTransactions), numUnspentOutputs)
 	return balance, ret
 }
 

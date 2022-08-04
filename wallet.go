@@ -17,6 +17,7 @@ import (
 
 const version = byte(0x00)
 const walletFileName = "wallets.dat"
+const addressChecksumLen = 4 // use 4 bytes of checksum in addresses
 
 // a wallet is a public key and a private key
 type Wallet struct {
@@ -108,18 +109,29 @@ func GetPubkeyhashFromAddr(address string) []byte {
 }
 
 // generates a bitcoin address using a Wallet's public key
+// it goes 1 byte version | public key hash | 4 byte checksum
 func (w *Wallet) generateAddress() []byte {
 	publicKeyHash := HashPubKey(w.PublicKey)
 
-	checksum1 := sha256.Sum256(publicKeyHash)
-	checksum2 := sha256.Sum256(checksum1[:])
+	versionAndHash := append([]byte{version}, publicKeyHash...)
 
-	output := append([]byte{version}, publicKeyHash...)
-	output = append(output, checksum2[:]...)
+	checksum := checksum(versionAndHash)
+
+	// add version to the beginning
+	output := versionAndHash
+	output = append(output, checksum...)
 
 	encoded := []byte(base58.Encode(output))
 
 	return encoded
+}
+
+// Checksum generates a checksum for a public key
+func checksum(payload []byte) []byte {
+	firstSHA := sha256.Sum256(payload)
+	secondSHA := sha256.Sum256(firstSHA[:])
+
+	return secondSHA[:addressChecksumLen]
 }
 
 // creates a new wallet to add to the wallets object
@@ -151,4 +163,14 @@ func (w *Wallets) saveToFile() {
 	if err != nil {
 		log.Panic(err)
 	}
+}
+
+// to validate, we will use the checksum. Strip away the checksum value
+// calculate the sha256 hash twice on version+hash, should be equal to old checksum
+func ValidateAddress(addr string) bool {
+	byteaddr := base58.Decode(addr)
+	versionAndHash := byteaddr[:len(byteaddr)-addressChecksumLen]
+	actualChecksum := byteaddr[len(byteaddr)-addressChecksumLen:]
+	checksum := checksum(versionAndHash)
+	return bytes.Equal(checksum, actualChecksum)
 }

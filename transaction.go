@@ -100,26 +100,26 @@ func NewGeneralTransaction(from, to string, amount int, blockchain *Blockchain) 
 				Txid:      txidbytes,
 				OutputIdx: idx,
 				PublicKey: fromWallet.PublicKey,
+				Signature: nil, // signing this transaction will populate this fie
 			}
 			inputs = append(inputs, input)
 		}
 	}
 
 	// make ScriptPubKey "to" so that the money belongs to "to" now
-	toHash := GetPubkeyhashFromAddr(to)
+
 	output := TXOutput{
 		Value:         amount,
-		PublicKeyHash: toHash,
+		PublicKeyHash: GetPubkeyhashFromAddr(to),
 	}
 	outputs = append(outputs, output)
 
 	// if we weren't exact (which is likely, say we needed to send 50 but we had
 	// only +20 and +40) then we refund the extra 10 back to the sender, "from"
-	fromHash := GetPubkeyhashFromAddr(from)
 	if amountOwned > amount {
 		output := TXOutput{
 			Value:         amountOwned - amount,
-			PublicKeyHash: fromHash,
+			PublicKeyHash: GetPubkeyhashFromAddr(from),
 		}
 		outputs = append(outputs, output)
 	}
