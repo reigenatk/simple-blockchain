@@ -1,6 +1,6 @@
 ## Writing simple blockchain in Go
 
-Following [this](https://jeiwan.net/posts/building-blockchain-in-go-part-1/) I will attempt to write a simple blockchain. I know the basics of crypto (for example all the buzzwords) but decided that to *really* understand it, I should probably write up an implementation. After all, that's the best way to really understand something. Also, this implementation will try to follow Bitcoin as much as possible.
+Following [this](https://jeiwan.net/posts/building-blockchain-in-go-part-1/) I will attempt to write a simple blockchain. I know the basics of crypto (for example all the buzzwords) but decided that to *really* understand it, I should probably write up an implementation. After all, that's the best way to really understand something. This implementation tries to follow Bitcoin as much as possible, so that's why Bitcoin is mentioned so much.
 
 > Note this readme is really long, mostly so I can go back and read it when I inevitably forget what I did. 
 
