@@ -4,6 +4,19 @@ Following [this](https://jeiwan.net/posts/building-blockchain-in-go-part-1/) I w
 
 > Note this readme is really long, mostly so I can go back and read it when I inevitably forget what I did. 
 
+### Install/Run
+Just run `go install` and command is called `blockchain`. Make sure go/bin is inside your PATH.
+```
+Usage:
+  getbalance -address ADDRESS - Get balance of ADDRESS
+  newblockchain -address ADDRESS - Create a blockchain and send genesis block reward to ADDRESS
+  printchain - Print all the blocks of the blockchain
+  send -from FROM -to TO -amount AMOUNT - Send AMOUNT of coins from FROM address to TO
+  listaddresses - list all the addresses on this network
+  createwallet - Generates a public/private keypair, returns your address
+  clear - Clears all the files (blockchain.db) and (wallets.dat)
+```
+
 ### Concepts
 
 First is the concept of a **Block**, which is merely just the following
@@ -137,3 +150,10 @@ Libraries used:
 - `ecdsa` for elliptic curve algorithms `sign` and `verify`
 - `big` for large numbers (which are created from ECDSA)
 - `golang.org/x/crypto/ripemd160` for RIPEMD160 hash algorithm (used for publickey -> address)
+
+### Video
+
+Sorry for bad mic :(
+[](https://user-images.githubusercontent.com/69275171/183265546-00440ba1-a6dd-449a-9b28-2992cd9a6d83.mp4)
+
+
