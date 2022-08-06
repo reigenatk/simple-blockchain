@@ -97,11 +97,13 @@ The UTXO set was a good optimization, but when creating it, we still need to go 
 It works by taking each transaction, arranging it in a tree-like structure, and repeatedly concatenating and hashing the results until there is just one hash left. Then that hash is put in the block header.
 
 # Network
-Bitcoin wouldn't be worth anything without users! And users means there must be a network. Blockchains are peer-to-peer, meaning **there is no central authority!** Each client on the Bitcoin Network is called a **node**. Right now, there seems to be about [15,000 nodes connected](https://bitnodes.io/). To become a node, all you have to do is download Bitcoin Core, and run it on your PC!
+Bitcoin wouldn't be worth anything without users! And users means there must be a network. Blockchains are peer-to-peer, meaning **there is no central authority!** Each user on the Bitcoin Network is formally called a **node**. Right now, there seems to be about [15,000 nodes connected](https://bitnodes.io/). To become a node, all you have to do is download Bitcoin Core, and run it on your PC!
 
 The three types of nodes are Miners, Full nodes, and SPV nodes. Miners simply try to hash blocks, Full nodes are responsible for node discovery and verifying mined blocks, as well as verifying transaction signatures. And SPVs are kinda like Full nodes except they don't keep a full copy of the blockchain. They also help to verify transactons.
 
-In our mock implementation, we will have one of each type. Let's say we want to connect to the network. The first thing we do is send a `version` message to another node, which has the full chain. The important field is the `Height` field, which tells the other node how much of the full blockchain we have. If we don't have the full blockchain yet, then we download it from someone who has it.
+How do users communicate? Can they just send stuff willy nilly to each other? Of course not. There's a standard, of course! There are roughly 20 or so kinds of **message formats** you can send, the full list is listed in section 3 [on this page](https://en.bitcoin.it/wiki/Protocol_documentation). But the ones we will focus on are "version", "getblocks", "addr", "block", "inv", "getdata", and "tx".
+
+The rough idea is that we want to download the full blockchain, if we do not yet have it. This can be achieved using the above message types. Then once we have the full blockchain (think of it as being up to date to your favorite Netflix show!), we can now start talking with other peers about the latest blocks coming into the network in real time. But until then, we cannot participate, since we need to catch up.
 
 # Abbreviations
 
@@ -118,9 +120,13 @@ In our mock implementation, we will have one of each type. Let's say we want to 
 
 Blockchains have blocks (which you can access using Iterator), each block has a list of transactions, and each transaction has a list of inputs/outputs (TXInput, TXOutput). Inputs on the transaction reference previous transactions' outputs, but only one input can correspond to one output and vice versa.
 
-Fun fact, Bitcoin's official implementation is called **Bitcoin Core** and is availble on GitHub.
+Code structure:
+- `cli.go` are the functions that are immediately called after your input in the command line
+- `blockchain.go` and `transaction.go` are probably the two most important files for they contain the core logic of how crypto works
+- `proofofwork.go` for the mining stuff
 
-Libraries we use
+
+Libraries used:
 - `encoding/gob` for easy serialization/deserialization
 - `boltDB` for persistance
 - `flag` for user input
