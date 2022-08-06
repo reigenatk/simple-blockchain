@@ -26,8 +26,9 @@ type Transaction struct {
 
 // coinbase transaction is a specific type of transaction
 // used to reward miners. It is not a normal transaction
-// in the sense that it accesses no previous outputs
+// in the sense that it accesses no previous outputs in its inputs
 // and also stores a subsidy (miner reward) as the value in its output
+// with a hash equal to the person who receives the reward, "to"
 func NewCoinbaseTX(to, data string) *Transaction {
 	wallets, err := NewWallets()
 	if err != nil {
@@ -84,7 +85,11 @@ func NewGeneralTransaction(from, to string, amount int, blockchain *Blockchain) 
 	// code word for verifying the digital signatures
 	pubKeyHash := HashPubKey(fromWallet.PublicKey)
 
-	amountOwned, outputTransactions := blockchain.findSpendableOutputs(pubKeyHash, amount)
+	utxoset := UTXOSet{
+		Blockchain: blockchain,
+	}
+
+	amountOwned, outputTransactions := utxoset.FindSpendableOutputs(pubKeyHash, amount)
 
 	// check if enough money
 	if amountOwned < amount {
@@ -283,4 +288,14 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		}
 	}
 	return true
+}
+
+func (tx *Transaction) Serialize() []byte {
+	var output bytes.Buffer
+	enc := gob.NewEncoder(&output)
+	err := enc.Encode(tx)
+	if err != nil {
+		log.Fatal("Encode err:", err)
+	}
+	return output.Bytes()
 }

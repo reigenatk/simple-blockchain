@@ -2,6 +2,8 @@
 
 Following [this](https://jeiwan.net/posts/building-blockchain-in-go-part-1/) I will attempt to write a simple blockchain. I know the basics of crypto (for example all the buzzwords) but decided that to *really* understand it, I should probably write up an implementation. After all, that's the best way to really understand something. Also, this implementation will try to follow Bitcoin as much as possible.
 
+> Note this readme is really long, mostly so I can go back and read it when I inevitably forget what I did. 
+
 ### Concepts
 
 First is the concept of a **Block**, which is merely just the following
@@ -51,7 +53,7 @@ There's also this important concept in crypto of the public/private key pair. Us
 
 You might wonder, why does this public/private key stuff matter? Well turns out bitcoin *addresses* are public keys that have been sent through hashing functions (SHA256 and RIPEMD160) and base58 encoded. The address is actually made up of three parts mashed together (see above image)- the version, the actual hash, and the checksum, all base58 encoded. Since hashes are one way, you *cannot* recover the public key from the address. This also means that once you have a pub/priv keypair, you have an address!
 
-# Transactions
+# Signing Transactions
 
 ![image](https://user-images.githubusercontent.com/69275171/182747076-e7c9e386-5bd0-4867-9b26-7e6948a6957d.png)
 
@@ -66,9 +68,40 @@ Every transaction input in Bitcoin is signed *by the one who created the transac
 
 Bitcoin uses the ECDSA (Elliptic Curve Digital Signature Algorithm) to sign transactions. 
 
-**Digital signature** is an important concept in cryptography, and is just whwen you sign some data with a private key, pass that result to someone, and they decode it with their public key. You might've opened an account before, say with something like Metamask, where you were given a random list of strings. That is your private key. The private key must *never* be leaked because otherwise, people have full access to your account, as they can create digital signatures.
+**Digital signature** is an important concept in cryptography, and is just when  you sign some data with a private key, pass that result to someone, and they decode it with their public key. You might've opened an account before, say with something like Metamask, where you were given a random list of strings. That is your private key. The private key must *never* be leaked because otherwise, people have full access to your account, as they can create digital signatures.
 
-Transactions are hashed, and usually they use what's called a *trimmed copy*, which is a more compact version of the entire Transaction.
+It wouldn't be too far off to say that Bitcoin's reliability comes from digital signatures. Without it, there would be no security.
+
+Also in Bitcoin, everything is identified by hashes. The transactions themselves are individually hashed (the ID of the transaction is just a hash), put together into a transaction array (which lives in a block). The Transaction array is hashed to a byte slice via the Merkel Tree, and finally the block is serialized (using gob) to get the block hash, which is the "name" of the block you see on blockchain sites like [Blockchain.com](https://www.blockchain.com/explorer?view=btc)
+
+# UTXO Set
+
+Just as we stored blocks in BoltDB, so will we store transactions. The reasoning is simple, right now  we need to find the full list of UTXOs every time we want to do a transaction, which means iterating over **every single block in the blockchain**, since transactions reside in blocks! This is not sustainable at all, bitcoin for instance has 747,836 blocks with about 500 GB of data (as of Aug 2022). This would take too much time to go through.
+
+The solution is we create the **UTXO set**, which acts as a kind of cache of sorts. The idea behind this is the following- not all blocks matter when we care about finding the balance of an address. Only unspent transaction outputs matter since those are the only ones that provide a balance. Therefore the philosophy is to have a set of unspent transaction outputs ready at hand, that way we don't need to scan each block.
+
+We will make another bucket in Bolt called `UTXOSet`, and this bucket will hold the follow key-value pairs
+
+> 32-byte transaction hash -> list of unspent transaction output records for that transaction (stores as a TXOutputs object)
+
+And every time we make a block, we will "update" the UTXOSet, as well as provide a general `reindex` function to rescan the whole blockchain. But we will only call that function upon blockchain initialization, as it is costly. Finally, whenever we send money (thus creating a new block), in order to scan the balance of a person, instead of scanning the whole blockchain we simply use the UTXOSet, saving tons of time, especially if the blockchain is large.
+
+As a cool exercise, check out [this site](https://statoshi.info/d/000000009/unspent-transaction-output-set?orgId=1&refresh=10m). You can see how many tarnsactions there are with unspent outputs, how many UTXOs there are total, the size of the UTXO set, and how many bitcoins exist. About 837 million unspent transactions, make up the entirety of the 19 million bitcoins! Also fun fact, Bitcoin has a hard cap at **21 million**. We're getting close to mining all of it!
+
+# Merkle Tree 
+
+The UTXO set was a good optimization, but when creating it, we still need to go into each block and go through a list of all the transactions. What if there was a way in which we could tell whether a transaction was inside of a block, without looping through the array of transactions in the block? This is where a **Merkle Tree** (also known as hash tree) can help. The name sounds fancy, but it's literally just a tree where parent nodes are made up of the hashes of their child nodes. They allow for logarithmic querying as to whether or not something belongs in the tree, which is better than the other, obvious constant time approach of looping through everything.
+
+![image](https://user-images.githubusercontent.com/69275171/183257263-7e54ff16-9c34-4f36-aa62-4bc759e620e6.png)
+
+It works by taking each transaction, arranging it in a tree-like structure, and repeatedly concatenating and hashing the results until there is just one hash left. Then that hash is put in the block header.
+
+# Network
+Bitcoin wouldn't be worth anything without users! And users means there must be a network. Blockchains are peer-to-peer, meaning **there is no central authority!** Each client on the Bitcoin Network is called a **node**. Right now, there seems to be about [15,000 nodes connected](https://bitnodes.io/). To become a node, all you have to do is download Bitcoin Core, and run it on your PC!
+
+The three types of nodes are Miners, Full nodes, and SPV nodes. Miners simply try to hash blocks, Full nodes are responsible for node discovery and verifying mined blocks, as well as verifying transaction signatures. And SPVs are kinda like Full nodes except they don't keep a full copy of the blockchain. They also help to verify transactons.
+
+In our mock implementation, we will have one of each type. Let's say we want to connect to the network. The first thing we do is send a `version` message to another node, which has the full chain. The important field is the `Height` field, which tells the other node how much of the full blockchain we have. If we don't have the full blockchain yet, then we download it from someone who has it.
 
 # Abbreviations
 
@@ -85,7 +118,7 @@ Transactions are hashed, and usually they use what's called a *trimmed copy*, wh
 
 Blockchains have blocks (which you can access using Iterator), each block has a list of transactions, and each transaction has a list of inputs/outputs (TXInput, TXOutput). Inputs on the transaction reference previous transactions' outputs, but only one input can correspond to one output and vice versa.
 
-Delete the .db file to create a new blockchain.
+Fun fact, Bitcoin's official implementation is called **Bitcoin Core** and is availble on GitHub.
 
 Libraries we use
 - `encoding/gob` for easy serialization/deserialization

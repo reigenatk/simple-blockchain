@@ -160,6 +160,12 @@ func (cli *CLI) InitBlockchain(address string) {
 	blockchain := InitBlockchain(address)
 	defer blockchain.DB.Close()
 
+	// create UTXO Set
+	utxoset := UTXOSet{
+		Blockchain: blockchain,
+	}
+	// and initialize it
+	utxoset.Reindex()
 }
 
 // the essence of sending is two parts:
@@ -194,8 +200,21 @@ func (cli *CLI) send(from, to string, amount int) {
 	// create transaction
 	transaction := NewGeneralTransaction(from, to, amount, blockchain)
 
+	// This is the "miners reward" in our network, to keep it simple, let's say
+	// the person who sends the transaction will get the reward
+	// for mining, although in a real implementation this obviously
+	// wouldn't be the case
+	minerReward := NewCoinbaseTX(from, "")
+
 	// create and add new block to chain (this does the mining)
-	blockchain.AddBlock([]*Transaction{transaction})
+	block := blockchain.AddBlock([]*Transaction{transaction, minerReward})
+
+	// update UTXO set
+	UTXOSet := UTXOSet{
+		Blockchain: blockchain,
+	}
+	UTXOSet.Update(block)
+
 	fmt.Println("Successfully sent", amount, "from", from, "to", to)
 }
 
@@ -204,12 +223,17 @@ func (cli *CLI) getBalance(address string) {
 	ret := 0
 	blockchain := InitBlockchain(address)
 	defer blockchain.DB.Close()
-	unspentTransactionOutputs := blockchain.findUnspentTXOs(address)
+
+	// create UTXO Set
+	UTXOSet := UTXOSet{
+		Blockchain: blockchain,
+	}
+	unspentTransactionOutputs := UTXOSet.FindUTXO(GetPubkeyhashFromAddr(address))
 
 	for _, output := range unspentTransactionOutputs {
 		ret += output.Value
 	}
-	fmt.Printf("The address %s has %d balance currently", address, ret)
+	fmt.Printf("The address %s has %d balance currently\n", address, ret)
 }
 
 func (cli *CLI) createWallet() {
@@ -231,7 +255,7 @@ func (cli *CLI) listAddresses() {
 		log.Panic(err)
 	}
 	for address, _ := range wallets.Wallets {
-		fmt.Println(address)
+		cli.getBalance(address)
 	}
 }
 

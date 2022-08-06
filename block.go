@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/gob"
 	"log"
 	"time"
@@ -33,7 +32,7 @@ func NewBlock(transactions []*Transaction, prevBlockHash []byte) *Block {
 	nonce, hash := pow.Run()
 	ret.Hash = hash[:]
 	ret.Nonce = nonce
-	log.Printf("nonce is %d, hash is %x", nonce, hash)
+	log.Printf("nonce is %d, block hash is %x", nonce, hash)
 
 	return &ret
 }
@@ -70,20 +69,23 @@ func Deserialize(b []byte) *Block {
 	return &block
 }
 
-// takes the transactions field off a Block object and
-// transforms it into a []byte so we can
-// put it with the other block header info and
-// start guessing nonces to mine the block
+// Called by proofofwork.go, this assumes all transactions have been added to
+// the block and that each one has an ID via setID(), so we will now represent
+// all the transactions with a single hash. This is done via the Merkel Tree
+// which hashes up all the serialized forms of the transactions,
+// into a singular one in a tree-like structure
+// we then return the resulting hash.
 func (b *Block) HashTransactions() []byte {
 	var txHashes [][]byte
-	var txHash [32]byte
 
-	// add each transaction's ID only
+	// add each transaction's serialized bytes
 	for _, tx := range b.Transactions {
-		txHashes = append(txHashes, tx.ID)
+		txHashes = append(txHashes, tx.Serialize())
 	}
-	// join all the IDs into a big byte slice
-	// and take the hash of it
-	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
-	return txHash[:]
+
+	// create Merkel Tree for this block
+	mt := NewMerkleTree(txHashes)
+	rootNodeData := mt.RootNode.Hash
+
+	return rootNodeData
 }
