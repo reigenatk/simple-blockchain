@@ -105,6 +105,8 @@ How do users communicate? Can they just send stuff willy nilly to each other? Of
 
 The rough idea is that we want to download the full blockchain, if we do not yet have it. This can be achieved using the above message types. Then once we have the full blockchain (think of it as being up to date to your favorite Netflix show!), we can now start talking with other peers about the latest blocks coming into the network in real time. But until then, we cannot participate, since we need to catch up.
 
+Some more important terms, the **mempool** is where transactions go to wait for nodes to verify them. Miners put the transactions into blocks, which then get verified, and that reduces the size of the mempool. Another term is the **height** of a block, this is just which block it is in the entire blockchain.
+
 # Abbreviations
 
 `TX` = transaction
